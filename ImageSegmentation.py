@@ -122,10 +122,11 @@ def run_EM(filename):
     rows = image.shape[0]
     cols = image.shape[1]
     # X = image.reshape((image.shape[0] * image.shape[1], image.shape[2]))
+    channels = data[:, 2:]
     X = np.copy(data)
     X = scale(X)
 
-    EPS = 1E-8
+    EPS = 1E-4
     N = X.shape[0]  # number of observations
     K = 2  # number of clusters to segment into
     D = 3  # dimension of each data point
@@ -163,18 +164,35 @@ def run_EM(filename):
 
     cluster_assignment = np.argmax(r, axis=1)
 
-    k_bg = 0
+    k_bg = np.argmin(np.unique(cluster_assignment, return_counts=True)[1])
+
     pixel_mask = np.zeros((N, D), dtype=np.float32)
     pixel_mask[cluster_assignment == k_bg] = [100.0, 0.0, 0.0]
     mask_image = np.reshape(pixel_mask, (cols, rows, D)).transpose((1, 0, 2))
-    output_filename = "{}_mask.jpg".format(filename)
+    output_filename = "{}_mask.jpg".format(filename.split('.')[0])
     cv2.imwrite(output_filename,
                 (cv2.cvtColor(mask_image, cv2.COLOR_Lab2BGR) * 255).astype(
                     np.uint8))
 
+    seg1 = np.copy(channels)
+    seg1[cluster_assignment == k_bg] = [0.0, 0.0, 0.0]
+    seg1_img = np.reshape(seg1, (cols, rows, D)).transpose((1, 0, 2))
+    output_filename = "{}_seg1.jpg".format(filename.split('.')[0])
+    cv2.imwrite(output_filename,
+                (cv2.cvtColor(seg1_img, cv2.COLOR_Lab2BGR) * 255).astype(
+                    np.uint8))
+
+    seg2 = np.copy(channels)
+    seg2[cluster_assignment != k_bg] = [0.0, 0.0, 0.0]
+    seg2_img = np.reshape(seg2, (cols, rows, D)).transpose((1, 0, 2))
+    output_filename = "{}_seg2.jpg".format(filename.split('.')[0])
+    cv2.imwrite(output_filename,
+                (cv2.cvtColor(seg2_img, cv2.COLOR_Lab2BGR) * 255).astype(
+                    np.uint8))
+
 
 if __name__ == '__main__':
-    testfiles = ['cow.txt', 'owl.txt', 'zebra.txt', 'fox.txt']
+    testfiles = ['fox.txt']
     for file in testfiles:
         print("Running file:", file)
         run_EM(file)
