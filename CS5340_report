@@ -1,0 +1,395 @@
+\documentclass[12pt]{article}
+
+\usepackage{color}
+\usepackage{amssymb}
+\usepackage{amsmath}
+\usepackage[utf8]{inputenc}
+\usepackage{fancyhdr}
+
+\pagestyle{fancy}
+\fancyhf{}
+\rhead{\today}
+\lhead{\bfseries Chen Xukun A0087649J\\*Muthiah Nachiappan A0094582W}
+\rfoot{Page \thepage}
+
+\setlength\parindent{0pt}
+
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{multirow}
+\graphicspath{{results/}}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{float}
+\captionsetup[figure]{font=small}
+
+\usepackage{bm}
+\usepackage{amssymb}
+
+\usepackage[a4paper,top=3cm,bottom=2cm,left=3cm,right=3cm,marginparwidth=1.75cm]{geometry}
+\setlength\parindent{0pt}
+\setlength{\parskip}{1em}
+
+\begin{document}
+
+\centerline{\LARGE CS5340 Project}
+\vspace{5mm}
+\centerline{Chen Xukun A0087649J}
+\centerline{Muthiah Nachiappan A0094582W}
+
+
+\section {Data Denoising}
+\subsection{Gibbs sampling algorithm}
+
+Choice of coupling strength $J$ and $\sigma$:
+From experiment we see that if $J$ is too big (i.e. $>20$), whole image would become black. If $\sigma$ is too big (i.e. $>10$), the shape of the item in the image would begin to distort.
+If both $J$ and $\sigma$ are too small (i.em $<0.8$), then the noise is not getting removed.
+We set $\sigma = 1$ and coupling strength $J=2$.
+
+We define $x_i\in \{-1, +1 \}$ as the state of node $x_i$.
+Our algorithm works as follows:
+Looping through pixels one by one, calculate $p(x_t|x_{-t},y,\theta)$ and update $x_t$ right away by getting a random number $r_i$ between 0 and 1, if $r_i > p(x_t|x_{-t},y,\theta)$, $x_i = -1$, else $x_i = 1$.
+
+After the burn-in period, we accumulate $x_i$ for every $i$, at the end of the algorithm, we output 255 if the accumulated value for $x_i>0$ or 0 if the accumulated value for $x_i<0$.
+
+In total we loop through the image 8 times, we treated the first 4 iteration as burn-in, and final result is taken from averaging results from 5th iteration onward.
+
+\begin{figure}[H]
+   \begin{subfigure}{0.25\textwidth}
+     \centering
+     \includegraphics[width=1\linewidth]{1_result_gib}
+   \end{subfigure}%
+   \begin{subfigure}{0.25\textwidth}
+     \centering
+     \includegraphics[width=1\linewidth]{2_result_gib}
+   \end{subfigure}%
+   \begin{subfigure}{0.25\textwidth}
+     \centering
+     \includegraphics[width=1\linewidth]{3_result_gib}
+   \end{subfigure}%
+   \begin{subfigure}{0.25\textwidth}
+     \centering
+     \includegraphics[width=1\linewidth]{4_result_gib}
+   \end{subfigure}
+   \caption{Gibbs Sampling Denoise: $J=2$, $\sigma=1$}\label{Fig:gibbs}
+\end{figure}
+
+
+\subsection{Variational inference algorithm}
+We are using $q(x)$ to approximate posterior distribution $p(x|y)$ where $q(x)=\prod_i q(x_i, u_i)$ and $p(y|x)=\prod_ip(y_i|x_i)$. We define $x_i\in \{-1, +1 \}$ as the state of node $x_i$, and $y_i\in \{-1, +1\}$ as the observed state of node $x_i$.
+\vspace{5mm}
+Before we derieve $ELBO$, we need to show that $p(x,y) = \prod_ip(x_i,y_i)$.
+We prove it as follows:\\*
+since $p(x,y) = p(x)p(y|x)$ and we know $p(y|x)=\prod_ip(y_i|x_i)$\\*
+We are also given that
+\begin{equation*}
+\begin{split}
+p(x) &=\frac{1}{Z_0}exp(\sum_i\sum_j\in nbr(i) W_{ij}x_ix_j)\\
+&=\prod_i\frac{1}{Z_0}exp(\sum_j\in nbr(i) W_{ij}x_ix_j)\\
+&=\prod_ip(x_i)
+\end{split}
+\end{equation*}
+Hence we conclude that $p(x,y) =\prod_ip(x_i)p(y_i|x_i) = \prod_ip(x_i,y_i)$.
+
+We defined the $ELBO$ under for this problem as:
+\begin{equation*}
+\begin{split}
+ELBO &= q(x) log\frac{p(x,y)}{q(x)}\\
+&= q(x) log(p(x,y) - q(x) log(q(x))\\
+&= \prod_i q(x_i,u_i) log(\prod_i p(x_i,y_i)) - \prod_i q(x_i, u_i) log(\prod_i q(x_i,u_i))\\
+\end{split}
+\end{equation*}
+
+It is obvious that to minimze ELBO, we just need to make 
+\begin{equation*}
+\begin{split}
+log(\prod_i p(x_i,y_i)) &= log(\prod_i q(x_i,u_i))\\
+\sum_i log(p(x_i,y_i)) &= \sum_i log(q(x_i,u_i))\\
+\end{split}
+\end{equation*}
+
+As $x_i\in \{-1, +1 \}$, it is obvious that $q(x_i, u_i)$ is of Bernoulli distribution.
+
+To simplify this problem even more, we just need to calculate $u_i$ for all $i$ such that $p(x_i,y_i) == q(x_i, u_i)$.
+More explicitly, to calculate: 
+$$\frac{1-u_i}{u_i} = \frac{p(y_i,x_i=0)}{p(y_i,x_i=1)}$$
+
+For each iteration, we loop through all pixels one by one, calculate $u_i$. At the end of each iteration, we calculate $x_i$ for all $i$ using corresponding Bernoulli distribution: get a random number $r_i$ between 0 and 1, if $r_i > u_i$, $x_i = 0$, else $x_i = 1$.
+
+We set coupling strength $W_{i,j}=2$ and $c = 1$ to be consistent with the parameters used in Gibbs sampling algorithm.
+
+In total we loop through the image 5 times, and take the output from 5th iteration as the output.
+
+
+\begin{figure}[H]
+   \begin{subfigure}{0.25\textwidth}
+     \centering
+     \includegraphics[width=1\linewidth]{vi_noise1_0}
+     \caption{$1^{st}$ iteration}
+   \end{subfigure}%
+   \begin{subfigure}{0.25\textwidth}
+     \centering
+     \includegraphics[width=1\linewidth]{vi_noise1_1}
+     \caption{$2^{nd}$ iteration}
+   \end{subfigure}%
+   \begin{subfigure}{0.25\textwidth}
+     \centering
+     \includegraphics[width=1\linewidth]{vi_noise1_2}
+     \caption{$3^{rd}$ iteration}
+   \end{subfigure}%
+   \begin{subfigure}{0.25\textwidth}
+     \centering
+     \includegraphics[width=1\linewidth]{1_result_vi}
+     \caption{Final Result}
+   \end{subfigure}
+   \caption{Variational Inference Denoise: $J=2$, $\sigma=1$}\label{Fig:vi1}
+\end{figure}
+
+\begin{figure}[H]
+   \begin{subfigure}{0.25\textwidth}
+     \centering
+     \includegraphics[width=1\linewidth]{vi_noise2_0}
+     \caption{$1^{st}$ iteration}
+   \end{subfigure}%
+   \begin{subfigure}{0.25\textwidth}
+     \centering
+     \includegraphics[width=1\linewidth]{vi_noise2_1}
+     \caption{$2^{nd}$ iteration}
+   \end{subfigure}%
+   \begin{subfigure}{0.25\textwidth}
+     \centering
+     \includegraphics[width=1\linewidth]{vi_noise2_2}
+     \caption{$3^{rd}$ iteration}
+   \end{subfigure}%
+   \begin{subfigure}{0.25\textwidth}
+     \centering
+     \includegraphics[width=1\linewidth]{2_result_vi}
+     \caption{Final Result}
+   \end{subfigure}
+   \caption{Variational Inference Denoise: $J=2$, $\sigma=1$}\label{Fig:vi2}
+\end{figure}
+
+\begin{figure}[H]
+   \begin{subfigure}{0.25\textwidth}
+     \centering
+     \includegraphics[width=1\linewidth]{vi_noise3_0}
+     \caption{$1^{st}$ iteration}
+   \end{subfigure}%
+   \begin{subfigure}{0.25\textwidth}
+     \centering
+     \includegraphics[width=1\linewidth]{vi_noise3_1}
+     \caption{$2^{nd}$ iteration}
+   \end{subfigure}%
+   \begin{subfigure}{0.25\textwidth}
+     \centering
+     \includegraphics[width=1\linewidth]{vi_noise3_2}
+     \caption{$3^{rd}$ iteration}
+   \end{subfigure}%
+   \begin{subfigure}{0.25\textwidth}
+     \centering
+     \includegraphics[width=1\linewidth]{3_result_vi}
+     \caption{Final Result}
+   \end{subfigure}
+   \caption{Variational Inference Denoise: $J=2$, $\sigma=1$}\label{Fig:vi3}
+\end{figure}
+
+\begin{figure}[H]
+   \begin{subfigure}{0.25\textwidth}
+     \centering
+     \includegraphics[width=1\linewidth]{vi_noise4_0}
+     \caption{$1^{st}$ iteration}
+   \end{subfigure}%
+   \begin{subfigure}{0.25\textwidth}
+     \centering
+     \includegraphics[width=1\linewidth]{vi_noise4_1}
+     \caption{$2^{nd}$ iteration}
+   \end{subfigure}%
+   \begin{subfigure}{0.25\textwidth}
+     \centering
+     \includegraphics[width=1\linewidth]{vi_noise4_2}
+     \caption{$3^{rd}$ iteration}
+   \end{subfigure}%
+   \begin{subfigure}{0.25\textwidth}
+     \centering
+     \includegraphics[width=1\linewidth]{4_result_vi}
+     \caption{Final Result}
+   \end{subfigure}
+   \caption{Variational Inference Denoise: $J=2$, $\sigma=1$}\label{Fig:vi4}
+\end{figure}
+
+\clearpage
+\section{Expectation-Maximization Segmentation}
+
+\subsection{Problem Statement}
+In this section, we focus on using probabilistic graphical models to segment an image into 2: foreground and background.
+Each pixel belongs to one of the segments and the assignment of each pixel can be modelled as a categorical latent variable (Z),
+while the pixel value is the observed variable (X). The observed variables can be modelled as a multivariate normal distribution.
+The observations are 3-dimensional and each pixel can either be represented in the RGB space or the Lab space.
+
+\subsection{Approach}
+This is a clustering problem with 2 clusters, each represented as a Gaussian. The input is an image with $N$ pixels and
+each pixel is represented as a 3-dimensional random variable $\bm{x}_n$ where, $n=1,...,N$. $\bm{z}_n$ is a latent
+random variable that denotes the segment each observation belongs to and follows a categorical distribution that can be represented as:
+
+\begin{equation*}
+    p(Z) = \prod_{k=1}^{2} \pi_k^{z_k}
+\end{equation*}
+\noindent
+where the parameter $\pi = [\pi_1, \pi_2]$ represent the probability of Z taking each of the 2 states. This paramater also represents
+mixing coefficients of each cluster's Gaussian. The Gaussian mixture model is given by:
+
+\begin{equation*}
+    p(\bm{x}) = \sum_{k=1}^{2} \pi_k \mathcal{N} \left(\bm{x}|\bm{\mu}_k,\bm{\Sigma}_k\right)
+\end{equation*}
+\noindent
+The responsibility that each segment $k$ takes for explaining each observation $\bm{x}_n$ is given by $\gamma(\bm{Z})$
+which is an N x 2 table. We aim to find the parameters, $\theta$, that maximize the log-likelihood of the model, which is given by:
+
+\begin{equation}\label{eq:1}
+    ln p(\bm{x}_1,...,\bm{x}_N|\theta) = \sum_{n=1}^{N}ln\sum_{\bm{z}_n}p(\bm{x}_n, \bm{z}_n|\theta), \theta = \left\{\pi_1,\pi_2,\mu_1,\mu_2,\Sigma_1,\Sigma_2 \right\}
+\end{equation}
+
+\noindent
+Since we cannot obtain a closed form solution of the unknown parameters by setting the derivatives to 0, we initialize the parameters to sensible initial values and iteratively calculate new responsibilities and new parameters until the log-likelihood converges.
+To obtain sensible initializations, we first perform K-means clustering to estimate $\pi_k$, $\mu_k$ and $\Sigma_k$ for each cluster. Then we proceeded to the expectation step where we calculated the responsibilities as:
+
+\begin{equation*}
+    \gamma(z_{nk}) = \frac{\pi_k \mathcal{N} \left(\bm{x}_n|\bm{\mu}_k,\bm{\Sigma}_k\right)}{\sum_{j=1}^{2} \pi_j \mathcal{N} \left(\bm{x}_n|\bm{\mu}_j,\bm{\Sigma}_j\right)}
+\end{equation*}
+
+\noindent
+Next, in the maximization step, we re-estimate the parameters using the current responsibilities as such:
+
+\begin{equation*}
+    \bm{\mu}_k^{\mathnormal{new}} = \frac{1}{N_k}\sum_{n=1}^N\gamma(z_{nk})\bm{x}_n
+\end{equation*}
+
+\begin{equation*}
+    \bm{\Sigma}_k^{\mathnormal{new}} = \frac{1}{N_k}\sum_{n=1}^N\gamma(z_{nk})\left(\bm{x}_n-\bm{\mu}_k^{\mathnormal{new}}\right)\left(\bm{x}_n-\bm{\mu}_k^{\mathnormal{new}}\right)^T
+\end{equation*}
+
+\begin{equation*}
+    \bm{\pi}_k^{\mathnormal{new}} = \frac{N_k}{N}
+\end{equation*}
+
+\noindent
+where,
+\begin{equation*}
+    N_k = \sum_{n=1}^N\gamma(z_{nk})
+\end{equation*}
+
+\noindent
+After every iteration, we calculate the log-likelihood as specified in Equation~\ref{eq:1}.  The difference in the increase in log-likelihood after every iteration was computed. If the difference was less than $1\times10^{-6}$, the iteration was stopped and the final responsibilities were calculated.
+The segment that had the highest responsibility for each observation was assigned as the label. \\
+
+\subsection{Results and Discussion}
+Using EM algorithm, we successfully segmented all 4 test images into distinct foreground and background segments, with minimal noise. We experimented with using 3 features (the L, a, b channels) and 5 features (x-coordinate, y-coordinate and the L, a, b channels). We found that the results were better when 5 features were used. The input data was scaled along each feature independently using their respective means and standard deviations. We did not notice any difference in result between using the raw data and scaled data. However, the runtime was faster when scaled data was used.
+
+
+\begin{figure}[H]
+   \begin{subfigure}{0.25\textwidth}
+     \centering
+     \includegraphics[width=1\linewidth]{cow}
+     \caption{original Image}
+   \end{subfigure}%
+   \begin{subfigure}{0.25\textwidth}
+     \centering
+     \includegraphics[width=1\linewidth]{cow_mask}
+     \caption{mask}
+   \end{subfigure}%
+   \begin{subfigure}{0.25\textwidth}
+     \centering
+     \includegraphics[width=1\linewidth]{cow_seg1}
+     \caption{background}
+   \end{subfigure}%
+   \begin{subfigure}{0.25\textwidth}
+     \centering
+     \includegraphics[width=1\linewidth]{cow_seg2}
+     \caption{foreground}
+   \end{subfigure}
+   \caption{Segmentation}\label{Fig:cow}
+\end{figure}
+
+\begin{figure}[H]
+   \begin{subfigure}{0.25\textwidth}
+     \centering
+     \includegraphics[width=1\linewidth]{fox}
+     \caption{original Image}
+   \end{subfigure}%
+   \begin{subfigure}{0.25\textwidth}
+     \centering
+     \includegraphics[width=1\linewidth]{cow_mask}
+     \caption{mask}
+   \end{subfigure}%
+   \begin{subfigure}{0.25\textwidth}
+     \centering
+     \includegraphics[width=1\linewidth]{cow_seg1}
+     \caption{background}
+   \end{subfigure}%
+   \begin{subfigure}{0.25\textwidth}
+     \centering
+     \includegraphics[width=1\linewidth]{cow_seg2}
+     \caption{foreground}
+   \end{subfigure}
+   \caption{Segmentation}\label{Fig:fox}
+\end{figure}
+
+\begin{figure}[H]
+   \begin{subfigure}{0.25\textwidth}
+     \centering
+     \includegraphics[width=1\linewidth]{owl}
+     \caption{original Image}
+   \end{subfigure}%
+   \begin{subfigure}{0.25\textwidth}
+     \centering
+     \includegraphics[width=1\linewidth]{owl_mask}
+     \caption{mask}
+   \end{subfigure}%
+   \begin{subfigure}{0.25\textwidth}
+     \centering
+     \includegraphics[width=1\linewidth]{owl_seg1}
+     \caption{background}
+   \end{subfigure}%
+   \begin{subfigure}{0.25\textwidth}
+     \centering
+     \includegraphics[width=1\linewidth]{owl_seg2}
+     \caption{foreground}
+   \end{subfigure}
+   \caption{Segmentation}\label{Fig:owl}
+\end{figure}
+
+\begin{figure}[H]
+   \begin{subfigure}{0.25\textwidth}
+     \centering
+     \includegraphics[width=1\linewidth]{zebra}
+     \caption{original Image}
+   \end{subfigure}%
+   \begin{subfigure}{0.25\textwidth}
+     \centering
+     \includegraphics[width=1\linewidth]{zebra_mask}
+     \caption{mask}
+   \end{subfigure}%
+   \begin{subfigure}{0.25\textwidth}
+     \centering
+     \includegraphics[width=1\linewidth]{zebra_seg1}
+     \caption{background}
+   \end{subfigure}%
+   \begin{subfigure}{0.25\textwidth}
+     \centering
+     \includegraphics[width=1\linewidth]{zebra_seg2}
+     \caption{foreground}
+   \end{subfigure}
+   \caption{Segmentation}\label{Fig:zebra}
+\end{figure}
+
+\clearpage
+\section{Code Instruction}
+Before running the code, please make sure all input images required are inside $a1$ and $a2$ folder.
+\begin{enumerate}
+\item To run Gibbs Sampling: \textbf{python gibbs\_sampling.py}
+\item To run Variational Inference: \textbf{python variational\_inference.py}
+\item To run Image Segmentation: \textbf{python ImageSegmentation.py}
+\end{enumerate}
+
+
+\end{document}
