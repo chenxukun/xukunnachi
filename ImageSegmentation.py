@@ -192,7 +192,7 @@ def run_EM(filename):
 
 
 if __name__ == '__main__':
-    testfiles = ['fox.txt']
+    testfiles = ['cow.txt','fox.txt','owl.txt','zebra.txt']
     for file in testfiles:
         print("Running file:", file)
         run_EM(file)
